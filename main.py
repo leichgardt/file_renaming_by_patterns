@@ -51,6 +51,11 @@ class PDFFileObject:
         return json.dumps({'filename': self._path.name, 'attrs': self._get_splitted_filename()})
 
 
+def load_filters(data: str):
+    data = (filter_case.strip().split() for filter_case in data.split(','))
+    return [(flt, int(ind) - 1 if int(ind) > 0 else int(ind)) for flt, ind in data]
+
+
 def get_files(path: str | Path, pattern: str):
     directory = Path(path) if isinstance(path, str) else path
     if not directory.is_dir():
@@ -63,38 +68,35 @@ def save_to_json(data):
         json.dump(data, f)
 
 
-def main():
-    tprint('PDF file renaming', font='bell')  # font 2: bulbhead
-
-    dir_path = input('Enter directory path (default "./files"):') or './files'
-    pattern_search = input('Enter search pattern (default "*_*_*.pdf"):') or '*_*_*.pdf'
-    pattern_rename = input('Enter rename pattern (default "{2}_{0}_{1}.pdf"):') or '{2}_{0}_{1}.pdf'
-    filters = input('Enter filename filters comma separated, for example "jj 3". That means skip files to rename '
-                    'with "j" substring (ignoring case) into third filename part (default "j 3"):') or 'j 3'
-    print()
-
-    filters = (filter_case.strip().split() for filter_case in filters.split(','))
-    filters = [(flt, int(ind) - 1 if int(ind) > 0 else int(ind)) for flt, ind in filters]
-
-    result = []
-    for filepath in get_files(path=dir_path, pattern=pattern_search):
+def rename_files_by_patterns(directory_path, search_pattern, rename_pattern, rename_filters):
+    renamed_file_data = []
+    for filepath in get_files(path=directory_path, pattern=search_pattern):
         pdf = PDFFileObject(filepath)
         print(f'*** processing "{pdf.filepath}"')
         data_before = pdf.get_json()
         print(f'*** renaming...')
         if not pdf.rename_by_pattern(
-                pattern=pattern_rename,
-                filters=filters):
+                pattern=rename_pattern,
+                filters=rename_filters):
             print('*** skip')
             continue
         print(f'*** new filename: {pdf.filepath}')
-        result.append({'before': data_before, 'after': pdf.get_json()})
-    if result:
-        save_to_json(result)
-        print(f'*** {len(result)} files changed. JSON report saved into "result.json"')
-    else:
-        print('*** Files not changed')
+        renamed_file_data.append({'before': data_before, 'after': pdf.get_json()})
+    return renamed_file_data
 
 
 if __name__ == '__main__':
-    main()
+    tprint('File renaming by pattern', font='bell')
+
+    dir_path = input('Enter directory path (default "./files"):') or './files'
+    pattern_search = input('Enter search pattern (default "*_*_*.pdf"):') or '*_*_*.pdf'
+    pattern_rename = input('Enter rename pattern (default "{2}_{0}_{1}.pdf"):') or '{2}_{0}_{1}.pdf'
+    filters = load_filters(
+        input('Enter filename filters comma separated, for example "jj 3". That means skip files to rename '
+              'with "j" substring (ignoring case) into third filename part (default "j 3"):') or 'j 3')
+    result = rename_files_by_patterns(dir_path, pattern_search, pattern_rename, filters)
+    if result:
+        save_to_json(result)
+        print(f'{len(result)} files changed. JSON report saved to "result.json"')
+    else:
+        print('Files not changed')
