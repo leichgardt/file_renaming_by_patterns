@@ -1,28 +1,31 @@
 import json
 from pathlib import Path
+from typing import Callable
 
 
-class PDFFile:
+class PDFFileObject:
     def __init__(self, file: Path):
         self._file = file
+        self.splitter = '_'
 
     def _get_filename_parts(self):
-        return self._file.stem.split('_')
+        return self._file.stem.split(self.splitter)
 
-    def rename(self):
-        a, b, c = self._get_filename_parts()
-        if 'j' in c.lower():
+    def rename(self, f_pattern: str, flt: Callable = None):
+        parts = self._get_filename_parts()
+        if flt is not None and not flt(parts):
             return False
         path = self._file.resolve().parent
-        self._file.rename(f'{path}/{c}_{a}_{b}.pdf')
+        parts = f_pattern.format(*parts)
+        self._file.rename(f'{path}/{parts}.pdf')
         return True
 
     def to_json(self):
         return json.dumps({'filename': self._file.name, 'attrs': self._get_filename_parts()})
 
 
-def get_files(input_path: str):
-    return Path(input_path).glob('*_*_*.pdf')
+def get_files(path: str, pattern):
+    return Path(path).glob(pattern)
 
 
 def save_to_json(data):
@@ -32,12 +35,12 @@ def save_to_json(data):
 
 def main():
     result = []
-    for filepath in get_files('./files'):
-        file = PDFFile(filepath)
-        data_before = file.to_json()
-        if not file.rename():
+    for filepath in get_files(path='./files', pattern='*_*_*.pdf'):
+        pdf = PDFFileObject(filepath)
+        data_before = pdf.to_json()
+        if not pdf.rename(f_pattern='{2}_{0}_{1}', flt=lambda x: 'j' not in x[-1].lower()):
             continue
-        data_after = file.to_json()
+        data_after = pdf.to_json()
         result.append({'before': data_before, 'after': data_after})
     save_to_json(result)
 
