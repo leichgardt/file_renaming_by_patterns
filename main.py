@@ -37,7 +37,7 @@ class PDFFileObject:
     def _get_splitted_filename(self):
         return self._path.stem.split(self.splitter)
 
-    def rename_with_pattern(self, pattern: str, filters: list[tuple[str, int]] = None):
+    def rename_by_pattern(self, pattern: str, filters: list[tuple[str, int]] = None):
         parts = self._get_splitted_filename()
         if filters is not None:
             if any(flt in parts[ind] for flt, ind in filters):
@@ -51,8 +51,11 @@ class PDFFileObject:
         return json.dumps({'filename': self._path.name, 'attrs': self._get_splitted_filename()})
 
 
-def get_files(path: str, pattern: str):
-    return Path(path).glob(pattern)
+def get_files(path: str | Path, pattern: str):
+    directory = Path(path) if isinstance(path, str) else path
+    if not directory.is_dir():
+        raise OSError('Not a directory')
+    return directory.glob(pattern)
 
 
 def save_to_json(data):
@@ -61,7 +64,7 @@ def save_to_json(data):
 
 
 def main():
-    tprint('PDF file renaming', font='bell')  # bulbhead
+    tprint('PDF file renaming', font='bell')  # font 2: bulbhead
 
     dir_path = input('Enter directory path (default "./files"):') or './files'
     pattern_search = input('Enter search pattern (default "*_*_*.pdf"):') or '*_*_*.pdf'
@@ -79,14 +82,13 @@ def main():
         print(f'*** processing "{pdf.filepath}"')
         data_before = pdf.get_json()
         print(f'*** renaming...')
-        if not pdf.rename_with_pattern(
+        if not pdf.rename_by_pattern(
                 pattern=pattern_rename,
                 filters=filters):
             print('*** skip')
             continue
-        data_after = pdf.get_json()
         print(f'*** new filename: {pdf.filepath}')
-        result.append({'before': data_before, 'after': data_after})
+        result.append({'before': data_before, 'after': pdf.get_json()})
     if result:
         save_to_json(result)
         print(f'*** {len(result)} files changed. JSON report saved into "result.json"')
