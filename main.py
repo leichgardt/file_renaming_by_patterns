@@ -4,6 +4,11 @@ There is a possibility to add a filter to skip file renaming. The filter applies
 
 OOP production version of the script
 with multi-filter and console data input.
+
+The script work with some patterns:
+    * search pattern: *_*_*.pdf - where "*" (asterisk) means any substring
+    * rename pattern: {2}_{0}_{1}.pdf - where the numbers indicate a filename parts in a particular renaming sequence
+                      (for `str.format` method)
 """
 
 import json
@@ -16,7 +21,7 @@ from art import tprint
 __author__ = 'Leichgardt'
 
 
-class PDFFile:
+class File:
     """PDF file class with filepath and splitter to get parts of the file and pattern rename method"""
     _filepath: Path
     _splitter: str
@@ -24,6 +29,14 @@ class PDFFile:
     def __init__(self, filepath: Path, splitter: str):
         self.filepath = filepath
         self.splitter = splitter
+
+    @property
+    def name(self) -> str:
+        return self._filepath.name
+
+    @name.setter
+    def name(self, val):
+        self._filepath = self._filepath.rename(val)
 
     @property
     def filepath(self) -> Path:
@@ -57,11 +70,11 @@ class PDFFile:
                 return False
         path = self._filepath.resolve().parent
         parts = pattern.format(*parts)
-        self._filepath = self._filepath.rename(f'{path}/{parts}')
+        self.name = f'{path}/{parts}'
         return True
 
-    def get_json(self):
-        return json.dumps({'filename': self._filepath.name, 'attrs': self._get_splitted_filename()})
+    def get_data_dict(self):
+        return {'filename': self._filepath.name, 'attrs': self._get_splitted_filename()}
 
 
 def get_filters_from_str(data: str) -> list[tuple[str, int]]:
@@ -89,37 +102,41 @@ def rename_files_by_patterns(
         rename_filters: list[tuple[str, int]]
 ) -> list[dict]:
     renamed_file_data = []
-    for filepath in get_files(path=directory_path, pattern=search_pattern):
-        pdf = PDFFile(filepath, splitter)
-        print(f'*** processing "{pdf.filepath}"')
-        data_before = pdf.get_json()
+    for filepath in get_files(directory_path, search_pattern):
+        file = File(filepath, splitter)
+        print(f'*** processing "{file.name}"')
+        data_before = file.get_data_dict()
         print(f'*** renaming...')
-        if not pdf.rename_by_pattern(
+        if not file.rename_by_pattern(
                 pattern=rename_pattern,
                 filters=rename_filters):
             print('*** skip')
             continue
-        print(f'*** new filename: {pdf.filepath}')
-        renamed_file_data.append({'before': data_before, 'after': pdf.get_json()})
+        print(f'*** new filename: {file.filepath}')
+        renamed_file_data.append({'before': data_before, 'after': file.get_data_dict()})
     return renamed_file_data
 
 
 def main():
     tprint('File renaming by patterns', font='bell')
 
-    dir_path = input('Enter directory path (default "./files"):')
-    pattern_search = input('Enter search pattern (default "*_*_*.pdf"):')
-    pattern_rename = input('Enter rename pattern (default "{2}_{0}_{1}.pdf"):')
-    filename_splitter = input('Enter filename splitter (default "_"):')
-    file_filters = input('Enter filename filters comma separated, for example "this 1". That means skip files '
-                         'to rename with "this" substring (ignoring case) into first filename part (default "j 3"):')
+    dir_path = input('Enter directory path (default "./files"): ')
+    pattern_search = input('Enter search pattern (default "*_*_*.pdf"): ')
+    pattern_rename = input('Enter rename pattern (default "{2}_{0}_{1}.pdf"): ')
+    filename_splitter = input('Enter filename splitter (default "_"): ')
+    file_filters = input(
+        'Enter filename filters comma separated, for example "this 1, the 3".\nThat means skip files to rename '
+        'with "this" substring (ignoring case) into first filename part and also skip with "the" substring '
+        'into third filename part.\nEnter "-" to add no filters (default "j 3"): '
+    )
+    # todo add input validation
 
     result = rename_files_by_patterns(
         dir_path or './files',
         pattern_search or '*_*_*.pdf',
         pattern_rename or '{2}_{0}_{1}.pdf',
         filename_splitter or '_',
-        get_filters_from_str(file_filters or 'j 3')
+        None if file_filters.strip() == '-' else get_filters_from_str(file_filters or 'j 3')
     )
     if result:
         save_to_json(result)
